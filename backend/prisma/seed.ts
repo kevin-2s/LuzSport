@@ -1,9 +1,23 @@
 import { PrismaClient, Rol } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load env variables
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const superadminEmail = process.env.SUPERADMIN_EMAIL;
+  const superadminPassword = process.env.SUPERADMIN_PASSWORD;
+
+  if (!superadminEmail || !superadminPassword) {
+    throw new Error(
+      'Error: Las variables de entorno SUPERADMIN_EMAIL o SUPERADMIN_PASSWORD no están definidas en el archivo .env.'
+    );
+  }
+
   console.log('Clearing database...');
   await prisma.abono.deleteMany({});
   await prisma.fiado.deleteMany({});
@@ -15,58 +29,21 @@ async function main() {
   await prisma.usuario.deleteMany({});
   await prisma.tienda.deleteMany({});
 
-  console.log('Seeding stores...');
-  const tiendaNorte = await prisma.tienda.create({
-    data: {
-      nombre: 'LuzSport Sucursal Norte',
-      direccion: 'Av. Juan B. Justo 1234, CABA',
-    },
-  });
-
-  const tiendaSur = await prisma.tienda.create({
-    data: {
-      nombre: 'LuzSport Sucursal Sur',
-      direccion: 'Calle Falsa 432, Lomas de Zamora',
-    },
-  });
-
-  console.log('Seeding users...');
+  console.log('Seeding initial Superadmin account from environment variables...');
   const saltRounds = 10;
-  const hashPassword = (pass: string) => bcrypt.hashSync(pass, saltRounds);
+  const hashPassword = bcrypt.hashSync(superadminPassword, saltRounds);
 
-  // Superadmin
-  await prisma.usuario.create({
+  const superadmin = await prisma.usuario.create({
     data: {
-      email: 'superadmin@luzsport.com',
-      password: hashPassword('superadmin123'),
+      email: superadminEmail,
+      password: hashPassword,
       rol: Rol.SUPERADMIN,
     },
   });
 
-  // Shop Norte Manager
-  await prisma.usuario.create({
-    data: {
-      email: 'norte@luzsport.com',
-      password: hashPassword('norte123'),
-      rol: Rol.TIENDA,
-      tiendaId: tiendaNorte.id,
-    },
-  });
-
-  // Shop Sur Manager
-  await prisma.usuario.create({
-    data: {
-      email: 'sur@luzsport.com',
-      password: hashPassword('sur123'),
-      rol: Rol.TIENDA,
-      tiendaId: tiendaSur.id,
-    },
-  });
-
-  console.log('Seeding complete! Initial accounts:');
-  console.log('- Superadmin: superadmin@luzsport.com / superadmin123');
-  console.log(`- Norte Shop Manager: norte@luzsport.com / norte123 (Tienda: ${tiendaNorte.nombre})`);
-  console.log(`- Sur Shop Manager: sur@luzsport.com / sur123 (Tienda: ${tiendaSur.nombre})`);
+  console.log('Seeding complete!');
+  console.log(`- Administrador inicial creado con éxito: ${superadmin.email}`);
+  console.log('(La contraseña fue cifrada a partir de la variable de entorno del archivo .env)');
 }
 
 main()
