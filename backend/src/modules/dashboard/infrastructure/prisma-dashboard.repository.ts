@@ -13,10 +13,11 @@ export class PrismaDashboardRepository implements IDashboardRepository {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    // 1. Total vendido hoy and transaction count
+    // 1. Total vendido hoy and transaction count (Only PAGADA sales)
     const salesToday = await this.prisma.venta.findMany({
       where: {
         tiendaId,
+        estado: 'PAGADA',
         fecha: {
           gte: startOfToday,
           lte: endOfToday,
@@ -78,6 +79,7 @@ export class PrismaDashboardRepository implements IDashboardRepository {
       },
       take: 5,
       include: {
+        detalles: true,
         fiado: {
           include: {
             cliente: {
@@ -90,14 +92,36 @@ export class PrismaDashboardRepository implements IDashboardRepository {
       },
     });
 
-    return ventas.map((v) => ({
-      id: v.id,
-      articulo: 'Venta #' + v.id.slice(-6).toUpperCase(),
-      fecha: new Date(v.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }),
-      cliente: v.fiado?.cliente?.nombre || null,
-      monto: v.total,
-      estado: v.estado.toLowerCase(),
-    }));
+    // Fetch articles names to map them dynamically
+    const articleIds = Array.from(new Set(ventas.flatMap((v) => v.detalles.map((d) => d.articuloId))));
+    const articles = await this.prisma.articulo.findMany({
+      where: {
+        id: {
+          in: articleIds,
+        },
+      },
+      select: {
+        id: true,
+        nombre: true,
+      },
+    });
+
+    const articleMap = new Map(articles.map((a) => [a.id, a.nombre]));
+
+    return ventas.map((v) => {
+      const articuloNames = v.detalles
+        .map((d) => `${articleMap.get(d.articuloId) || 'Artículo'} T${d.talla} (${d.cantidad})`)
+        .join(', ');
+
+      return {
+        id: v.id,
+        articulo: articuloNames || 'Venta sin artículos',
+        fecha: new Date(v.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }),
+        cliente: v.fiado?.cliente?.nombre || null,
+        monto: v.total,
+        estado: v.estado.toLowerCase(),
+      };
+    });
   }
 
   async getLowStockTallas(tiendaId: string) {

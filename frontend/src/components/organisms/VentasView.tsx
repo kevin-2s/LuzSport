@@ -4,7 +4,7 @@ import { useArticulos } from '../../hooks/useArticulos';
 import { DataTable } from '../molecules/DataTable';
 import { CreateVentaModal } from './CreateVentaModal';
 import { Button } from '../atoms/Button';
-import { Plus, Calendar, User } from 'lucide-react';
+import { Plus, Calendar, User, Download } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Venta } from '../../hooks/useVentas';
 
@@ -28,6 +28,10 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedEstado, setSelectedEstado] = useState('Todas');
+  const [dateFilter, setDateFilter] = useState('');
+
+  // Export states
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (initialOpenAddModal) {
@@ -41,7 +45,6 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
       onAddModalClosed();
     }
   };
-  const [dateFilter, setDateFilter] = useState('');
 
   // Calculate totals
   const totalRegistros = ventas.length;
@@ -75,6 +78,130 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
       return true;
     });
   }, [ventas, selectedEstado, dateFilter]);
+
+  // Excel/CSV Export handler (Filtered sales directly)
+  const handleExportExcel = (dataToExport: Venta[]) => {
+    const headers = ['Fecha', 'Código Venta', 'Artículos', 'Cliente', 'Total', 'Estado'];
+    const rows = dataToExport.map((venta) => {
+      const fecha = new Date(venta.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+      const codigo = venta.id.slice(-6).toUpperCase();
+      const articulosStr = venta.detalles.map((d) => `${d.articuloNombre} T${d.talla} (${d.cantidad})`).join(' | ');
+      const cliente = venta.fiado?.cliente?.nombre || '—';
+      const total = venta.total;
+      const estado = venta.estado;
+      return [fecha, codigo, articulosStr, cliente, total, estado];
+    });
+
+    const csvContent = 
+      '\uFEFF' + 
+      [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `reporte_ventas_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // PDF Print report handler (Filtered sales directly)
+  const handleExportPDF = (dataToExport: Venta[]) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const title = `Reporte de Ventas - LuzSport`;
+    const dateText = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const totalSum = dataToExport.reduce((sum, v) => sum + v.total, 0);
+
+    const rowsHTML = dataToExport.map((venta) => {
+      const fecha = new Date(venta.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+      const codigo = venta.id.slice(-6).toUpperCase();
+      const articulosStr = venta.detalles.map((d) => `<div>${d.articuloNombre} T${d.talla} (x${d.cantidad})</div>`).join('');
+      const cliente = venta.fiado?.cliente?.nombre || '—';
+      const totalFormatted = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(venta.total).replace('COP', '$');
+      const estadoBadge = `<span style="font-size: 10px; font-weight: bold; text-transform: uppercase; padding: 2px 8px; border-radius: 9999px; background: ${venta.estado === 'PAGADA' ? '#D1FAE5; color: #065F46;' : '#FFEDD5; color: #9A3412;'}">${venta.estado}</span>`;
+
+      return `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px;">${fecha}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; font-weight: bold;">${codigo}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px;">${articulosStr}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px;">${cliente}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px; font-weight: bold;">${totalFormatted}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #E2E8F0; font-size: 12px;">${estadoBadge}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const totalSumFormatted = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(totalSum).replace('COP', '$');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #0F172A; margin: 40px; }
+            h1 { font-size: 24px; font-weight: bold; margin-bottom: 5px; color: #C2410C; }
+            p { font-size: 14px; color: #64748B; margin-top: 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background-color: #F8FAFC; text-align: left; padding: 12px 10px; font-size: 11px; font-weight: bold; color: #64748B; border-bottom: 2px solid #E2E8F0; text-transform: uppercase; }
+            .total-row { background-color: #FCFAF7; font-weight: bold; }
+            @media print {
+              button { display: none; }
+              body { margin: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 2px solid #C2410C; padding-bottom: 15px; margin-bottom: 20px;">
+             <div>
+               <h1>LuzSport - Reporte de Ventas</h1>
+               <p>${dateText}</p>
+             </div>
+             <div style="text-align: right;">
+               <div style="font-size: 18px; font-weight: bold; color: #C2410C;">Calzado & Moda</div>
+               <div style="font-size: 12px; color: #64748B;">Total Reportado: ${totalSumFormatted}</div>
+             </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Código</th>
+                <th>Artículos</th>
+                <th>Cliente</th>
+                <th>Total</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHTML}
+              <tr class="total-row">
+                <td colspan="4" style="padding: 15px 10px; border-top: 2px solid #E2E8F0; text-align: right; font-size: 14px; font-weight: bold;">TOTAL SUMATORIA:</td>
+                <td colspan="2" style="padding: 15px 10px; border-top: 2px solid #E2E8F0; font-size: 16px; font-weight: 900; color: #C2410C;">${totalSumFormatted}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #94A3B8;">
+            Este documento es una representación digital del histórico de ventas de la sucursal. Generado el ${new Date().toLocaleString()}.
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // Define columns for desktop table
   const columns = useMemo<ColumnDef<Venta>[]>(
@@ -174,13 +301,114 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
             {totalRegistros} registros • {formatCurrency(totalMonto)}
           </p>
         </div>
-        <Button 
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-1 px-5 py-2"
-        >
-          <Plus className="h-4 w-4" />
-          Nueva
-        </Button>
+        <div className="flex gap-2 items-center relative">
+          
+          {/* Dropdown de Exportación */}
+          <div className="relative">
+            <Button 
+              onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+              variant="outline"
+              className="flex items-center gap-1.5 !px-3 !py-1.5 !text-[10px] !tracking-[1px] border-neutral-border text-neutral-textSecondary hover:text-primary hover:border-primary/20 shrink-0 font-bold"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar
+            </Button>
+            
+            {isExportDropdownOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setIsExportDropdownOpen(false)}
+                />
+                <div className="absolute right-0 mt-1.5 w-48 bg-white border border-neutral-border rounded-xl shadow-lg py-1.5 z-20 animate-in fade-in slide-in-from-top-1 duration-150">
+                  {/* Excel section */}
+                  <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Excel (CSV)</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pagadas = ventas.filter((v) => v.estado === 'PAGADA');
+                      handleExportExcel(pagadas);
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
+                  >
+                    <span>🟢</span>
+                    Solo Pagadas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fiadas = ventas.filter((v) => v.estado === 'FIADA');
+                      handleExportExcel(fiadas);
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
+                  >
+                    <span>🟠</span>
+                    Solo Fiadas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleExportExcel(ventas);
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2 border-b border-slate-100 pb-2"
+                  >
+                    <span>📊</span>
+                    Todas las Ventas
+                  </button>
+
+                  {/* PDF section */}
+                  <div className="px-3 py-1 pt-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">PDF (Imprimir)</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pagadas = ventas.filter((v) => v.estado === 'PAGADA');
+                      handleExportPDF(pagadas);
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
+                  >
+                    <span>🟢</span>
+                    Solo Pagadas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fiadas = ventas.filter((v) => v.estado === 'FIADA');
+                      handleExportPDF(fiadas);
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
+                  >
+                    <span>🟠</span>
+                    Solo Fiadas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleExportPDF(ventas);
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
+                  >
+                    <span>📄</span>
+                    Todas las Ventas
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <Button 
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-1.5 !px-3.5 !py-1.5 !text-[10px] !tracking-[1px] shrink-0 font-bold"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Nueva
+          </Button>
+        </div>
       </div>
 
       {/* Filter Options */}

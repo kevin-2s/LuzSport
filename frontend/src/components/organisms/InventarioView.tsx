@@ -56,6 +56,17 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
     }).format(value).replace('COP', '$');
   };
 
+  // COLOR QUE TIENE EL NIVEL DE STOCK
+  const getTallaBadgeClass = (cantidad: number, stockMinimo: number) => {
+    if (cantidad === 0) {
+      return 'bg-red-50 border-red-200 text-semantic-danger font-bold';
+    }
+    if (cantidad <= stockMinimo) {
+      return 'bg-orange-50 border-orange-200 text-primary font-bold';
+    }
+    return 'bg-green-50 border-green-200 text-semantic-success font-semibold';
+  };
+
   // 2. Filtered data list for rendering (both table and cards)
   const filteredArticulos = useMemo(() => {
     return articulos.filter((art) => {
@@ -126,21 +137,14 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
         header: 'Tallas Disponibles',
         cell: ({ row }) => (
           <div className="flex flex-wrap gap-1">
-            {row.original.tallas.map((t) => {
-              const isAlert = t.cantidad <= t.stockMinimo;
-              return (
-                <span 
-                  key={t.id} 
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border 
-                    ${isAlert 
-                      ? 'bg-orange-50 border-orange-200 text-primary' 
-                      : 'bg-slate-50 border-neutral-border text-neutral-textSecondary'
-                    }`}
-                >
-                  {t.talla} • {t.cantidad}
-                </span>
-              );
-            })}
+            {row.original.tallas.map((t) => (
+              <span 
+                key={t.id} 
+                className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${getTallaBadgeClass(t.cantidad, t.stockMinimo)}`}
+              >
+                {t.talla} • {t.cantidad}
+              </span>
+            ))}
           </div>
         )
       },
@@ -336,21 +340,14 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
                 <div className="space-y-1.5">
                   <p className="text-[10px] font-bold text-slate-700 tracking-wide uppercase">Tallas Disponibles</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {art.tallas.map((t) => {
-                      const isAlert = t.cantidad <= t.stockMinimo;
-                      return (
-                        <span 
-                          key={t.id} 
-                          className={`text-xs font-semibold px-2 py-1 rounded-md border transition-all
-                            ${isAlert 
-                              ? 'bg-orange-50 border-orange-200 text-primary font-bold' 
-                              : 'bg-slate-50 border-neutral-border text-neutral-textSecondary'
-                            }`}
-                        >
-                          T{t.talla} • {t.cantidad}
-                        </span>
-                      );
-                    })}
+                    {art.tallas.map((t) => (
+                      <span 
+                        key={t.id} 
+                        className={`text-xs px-2 py-1 rounded-md border transition-all ${getTallaBadgeClass(t.cantidad, t.stockMinimo)}`}
+                      >
+                        T{t.talla} • {t.cantidad}
+                      </span>
+                    ))}
                   </div>
                 </div>
 

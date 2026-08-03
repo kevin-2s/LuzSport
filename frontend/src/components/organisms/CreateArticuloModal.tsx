@@ -53,14 +53,21 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
     setError(null);
 
     // Validations
-    if (tallas.some((t) => !t.talla || t.cantidad === '' || t.stockMinimo === '')) {
-      setError('Por favor completa todos los campos de tallas.');
-      return;
+    if (categoria !== 'Accesorios') {
+      if (tallas.some((t) => !t.talla || t.cantidad === '' || t.stockMinimo === '')) {
+        setError('Por favor completa todos los campos de tallas.');
+        return;
+      }
+    } else {
+      if (!tallas[0] || tallas[0].cantidad === '' || tallas[0].stockMinimo === '') {
+        setError('Por favor ingresa la cantidad de stock y el mínimo de alerta.');
+        return;
+      }
     }
 
     try {
       const formattedTallas = tallas.map((t) => ({
-        talla: t.talla.trim(),
+        talla: categoria === 'Accesorios' ? 'U' : t.talla.trim(),
         cantidad: parseInt(t.cantidad, 10),
         stockMinimo: parseInt(t.stockMinimo, 10),
       }));
@@ -68,7 +75,7 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
       await onSubmit({
         nombre: nombre.trim(),
         categoria,
-        color: color.trim(),
+        color: categoria === 'Accesorios' ? 'N/A' : color.trim(),
         precio: parseFloat(precio),
         tallas: formattedTallas,
       });
@@ -127,7 +134,15 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
               <select
                 id="categoria"
                 value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setCategoria(val);
+                  if (val === 'Accesorios') {
+                    setTallas([{ talla: 'U', cantidad: '', stockMinimo: '' }]);
+                  } else {
+                    setTallas([{ talla: '', cantidad: '', stockMinimo: '' }]);
+                  }
+                }}
                 className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-border text-sm transition-all duration-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
                 required
                 disabled={isLoading}
@@ -140,16 +155,20 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              label="Color"
-              type="text"
-              id="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              placeholder="Ej: Blanco/Azul"
-              required
-              disabled={isLoading}
-            />
+            {categoria !== 'Accesorios' ? (
+              <FormField
+                label="Color"
+                type="text"
+                id="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                placeholder="Ej: Blanco/Azul"
+                required
+                disabled={isLoading}
+              />
+            ) : (
+              <div className="hidden sm:block"></div>
+            )}
 
             <FormField
               label="Precio de Venta"
@@ -164,71 +183,113 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
             />
           </div>
 
-          {/* Tallas Grid */}
-          <div className="border-t border-neutral-border pt-4 space-y-3 shrink-0">
-            <div className="flex justify-between items-center">
-              <h4 className="text-xs font-bold text-slate-700 tracking-wide uppercase">Tallas y Stock</h4>
-              <button
-                type="button"
-                onClick={handleAddTallaField}
-                className="text-xs font-bold text-primary hover:text-primary-hover flex items-center gap-1 transition-colors"
-                disabled={isLoading}
-              >
-                <Plus className="h-4 w-4" />
-                Añadir Talla
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {tallas.map((t, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <div className="w-[30%]">
-                    <input
-                      type="text"
-                      placeholder="Talla (ej: 42)"
-                      value={t.talla}
-                      onChange={(e) => handleTallaChange(index, 'talla', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
-                      required
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="w-[30%]">
-                    <input
-                      type="number"
-                      placeholder="Stock"
-                      value={t.cantidad}
-                      onChange={(e) => handleTallaChange(index, 'cantidad', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
-                      required
-                      min="0"
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="w-[30%]">
-                    <input
-                      type="number"
-                      placeholder="Min Alerta"
-                      value={t.stockMinimo}
-                      onChange={(e) => handleTallaChange(index, 'stockMinimo', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
-                      required
-                      min="0"
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveTallaField(index)}
-                    disabled={tallas.length === 1 || isLoading}
-                    className="p-2 text-slate-400 hover:text-semantic-danger rounded-lg transition-colors disabled:opacity-30"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+          {/* Conditional Stock / Tallas Section */}
+          {categoria === 'Accesorios' ? (
+            /* Stock Inputs for Accesorios (No sizes) */
+            <div className="border-t border-neutral-border pt-4 space-y-3 shrink-0">
+              <h4 className="text-xs font-bold text-slate-700 tracking-wide uppercase">Cantidad de stock</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="cantidad" className="text-xs font-semibold text-slate-600">
+                    Stock Disponible
+                  </label>
+                  <input
+                    id="cantidad"
+                    type="number"
+                    placeholder="Ej: 15"
+                    value={tallas[0]?.cantidad || ''}
+                    onChange={(e) => handleTallaChange(0, 'cantidad', e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-neutral-textPrimary"
+                    required
+                    min="0"
+                    disabled={isLoading}
+                  />
                 </div>
-              ))}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="stockMinimo" className="text-xs font-semibold text-slate-600">
+                    Mínimo de Alerta
+                  </label>
+                  <input
+                    id="stockMinimo"
+                    type="number"
+                    placeholder="Ej: 3"
+                    value={tallas[0]?.stockMinimo || ''}
+                    onChange={(e) => handleTallaChange(0, 'stockMinimo', e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-neutral-textPrimary"
+                    required
+                    min="0"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Tallas Grid for Shoes and Clothing */
+            <div className="border-t border-neutral-border pt-4 space-y-3 shrink-0">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold text-slate-700 tracking-wide uppercase">Tallas y Stock</h4>
+                <button
+                  type="button"
+                  onClick={handleAddTallaField}
+                  className="text-xs font-bold text-primary hover:text-primary-hover flex items-center gap-1 transition-colors"
+                  disabled={isLoading}
+                >
+                  <Plus className="h-4 w-4" />
+                  Añadir Talla
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {tallas.map((t, index) => (
+                  <div key={index} className="flex items-center gap-2 animate-in fade-in duration-200">
+                    <div className="w-[30%]">
+                      <input
+                        type="text"
+                        placeholder="Talla (ej: 42)"
+                        value={t.talla}
+                        onChange={(e) => handleTallaChange(index, 'talla', e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="w-[30%]">
+                      <input
+                        type="number"
+                        placeholder="Stock"
+                        value={t.cantidad}
+                        onChange={(e) => handleTallaChange(index, 'cantidad', e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
+                        required
+                        min="0"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="w-[30%]">
+                      <input
+                        type="number"
+                        placeholder="Min Alerta"
+                        value={t.stockMinimo}
+                        onChange={(e) => handleTallaChange(index, 'stockMinimo', e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
+                        required
+                        min="0"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTallaField(index)}
+                      disabled={tallas.length === 1 || isLoading}
+                      className="p-2 text-slate-400 hover:text-semantic-danger rounded-lg transition-colors disabled:opacity-30"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex gap-3 justify-end pt-4 border-t border-neutral-border shrink-0">

@@ -3,6 +3,7 @@ import { useSessionStore } from '../../store/sessionStore';
 import { useDashboard } from '../../hooks/useDashboard';
 import { InventarioView } from '../../components/organisms/InventarioView';
 import { VentasView } from '../../components/organisms/VentasView';
+import { FiadosView } from '../../components/organisms/FiadosView';
 import { 
   LayoutDashboard, 
   Layers, 
@@ -128,17 +129,32 @@ export const DashboardPage: React.FC = () => {
 
       {/* 2. Main Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Mobile Top Header */}
-        <header className="flex md:hidden justify-between items-center bg-slate-900 text-white px-5 py-3.5 border-b border-slate-800 sticky top-0 z-30 shadow-sm shrink-0">
-          <div>
-            <p className="text-[9px] tracking-wider uppercase font-semibold text-slate-500">Tienda</p>
-            <h2 className="text-sm font-bold text-white tracking-wide">{sucursalNombre}</h2>
-          </div>
+        {/* Mobile Top Header (Matching Mockup exactly) */}
+        <header className="flex md:hidden justify-between items-center bg-slate-900 text-white px-5 py-3 border-b border-slate-800 sticky top-0 z-30 shadow-sm shrink-0">
+          {/* Left: Hamburger menu icon */}
+          <button type="button" className="text-slate-400 p-1">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          {/* Center: Active tab title */}
+          <h2 className="text-base font-bold text-white tracking-wide uppercase first-letter:capitalize">
+            {activeTab === 'resumen' ? 'Resumen' : activeTab}
+          </h2>
+
+          {/* Right: User Avatar Badge with click logout popup */}
           <button 
-            onClick={clearSession}
-            className="text-slate-400 hover:text-white p-1.5 rounded-lg transition-colors"
+            type="button"
+            onClick={() => {
+              if (window.confirm('¿Deseas cerrar sesión?')) {
+                clearSession();
+              }
+            }}
+            className="h-8 w-8 rounded-full bg-primary flex items-center justify-center font-bold text-white text-xs shadow-inner uppercase border border-slate-800 shrink-0"
+            title="Cerrar sesión"
           >
-            <LogOut className="h-5 w-5" />
+            {user?.email ? user.email[0] : 'D'}
           </button>
         </header>
 
@@ -151,6 +167,7 @@ export const DashboardPage: React.FC = () => {
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-neutral-textSecondary">
                   Hoy, {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
+                  <span className="md:hidden"> • {sucursalNombre}</span>
                 </p>
                 <h1 className="text-3xl font-extrabold text-neutral-textPrimary tracking-tight animate-in fade-in duration-300">
                   Resumen del día
@@ -410,10 +427,8 @@ export const DashboardPage: React.FC = () => {
           )}
 
           {activeTab === 'fiados' && (
-            <div className="animate-in fade-in duration-300 bg-white rounded-2xl border border-neutral-border p-8 text-center text-neutral-textSecondary text-sm max-w-lg mx-auto">
-              <Users className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-              <h3 className="font-bold text-base text-neutral-textPrimary mb-1">Módulo de Fiados</h3>
-              <p>Próximamente: Control de créditos y registro de abonos.</p>
+            <div className="animate-in fade-in duration-300">
+              <FiadosView />
             </div>
           )}
 
