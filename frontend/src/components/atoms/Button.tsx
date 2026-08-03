@@ -13,13 +13,13 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const baseStyles = 'px-4 py-2.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm';
+  const baseStyles = 'px-8 py-3.5 rounded-[45px] text-[11px] uppercase tracking-[2.5px] font-semibold transition-all duration-300 ease-out outline-none border-none shadow-[0px_8px_15px_rgba(0,0,0,0.08)] active:-translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex items-center justify-center';
   
   const variants = {
-    primary: 'bg-primary hover:bg-primary-hover text-white focus:ring-primary shadow-sm hover:shadow-md active:scale-98',
-    secondary: 'bg-neutral-textSecondary hover:bg-slate-800 text-white focus:ring-neutral-textSecondary shadow-sm active:scale-98',
-    outline: 'border border-neutral-border hover:bg-slate-50 text-neutral-textSecondary focus:ring-primary active:scale-98',
-    danger: 'bg-semantic-danger hover:bg-red-700 text-white focus:ring-semantic-danger shadow-sm active:scale-98',
+    primary: 'bg-primary text-white hover:bg-primary-hover hover:-translate-y-[7px] hover:shadow-[0px_15px_20px_rgba(194,65,12,0.4)]',
+    secondary: 'bg-white text-neutral-textPrimary border border-neutral-border hover:bg-primary hover:text-white hover:border-primary hover:-translate-y-[7px] hover:shadow-[0px_15px_20px_rgba(194,65,12,0.4)]',
+    outline: 'bg-transparent text-neutral-textSecondary border border-neutral-border hover:bg-slate-50 hover:-translate-y-[5px] hover:shadow-[0px_10px_15px_rgba(0,0,0,0.08)]',
+    danger: 'bg-semantic-danger text-white hover:bg-red-700 hover:-translate-y-[7px] hover:shadow-[0px_15px_20px_rgba(220,38,38,0.4)]',
   };
 
   return (
@@ -29,10 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {isLoading ? (
-        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
+        <span className="loading loading-infinity loading-sm mr-2 text-current"></span>
       ) : null}
       {children}
     </button>
