@@ -5,5 +5,7 @@ export interface IVentaRepository {
     estado: 'PAGADA' | 'FIADA';
     detalles: { articuloId: string; talla: string; cantidad: number; precioUnitario: number }[];
     clienteId?: string;
+    tipoCobro?: string;
+    diaCobro?: string;
   }): Promise<any>;
 }

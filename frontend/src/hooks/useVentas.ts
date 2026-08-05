@@ -64,6 +64,8 @@ export const useVentas = () => {
       estado: 'PAGADA' | 'FIADA';
       detalles: { articuloId: string; talla: string; cantidad: number; precioUnitario: number }[];
       clienteId?: string;
+      tipoCobro?: string;
+      diaCobro?: string;
     }) => {
       const response = await api.post('/ventas', data);
       return response.data;
@@ -72,6 +74,7 @@ export const useVentas = () => {
       queryClient.invalidateQueries({ queryKey: ['ventas'] });
       queryClient.invalidateQueries({ queryKey: ['articulos'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardData'] });
+      queryClient.invalidateQueries({ queryKey: ['fiados'] });
     },
   });
 

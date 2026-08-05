@@ -60,6 +60,8 @@ export class PrismaVentaRepository implements IVentaRepository {
       estado: 'PAGADA' | 'FIADA';
       detalles: { articuloId: string; talla: string; cantidad: number; precioUnitario: number }[];
       clienteId?: string;
+      tipoCobro?: string;
+      diaCobro?: string;
     },
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -118,11 +120,18 @@ export class PrismaVentaRepository implements IVentaRepository {
           throw new Error('Debe seleccionar un cliente para registrar una venta fiada.');
         }
 
+        const tipoCobro = data.tipoCobro || 'DIARIO';
+        const diaCobro = data.diaCobro || null;
+        const fechaVencimiento = calculateNextDueDate(new Date(), tipoCobro, diaCobro || undefined);
+
         await tx.fiado.create({
           data: {
             ventaId: venta.id,
             clienteId: data.clienteId,
             saldoPendiente: data.total,
+            tipoCobro,
+            diaCobro,
+            fechaVencimiento,
           },
         });
       }
@@ -130,4 +139,31 @@ export class PrismaVentaRepository implements IVentaRepository {
       return venta;
     });
   }
+}
+
+export function calculateNextDueDate(baseDate: Date, tipoCobro: string, diaCobro?: string): Date {
+  const result = new Date(baseDate);
+  if (tipoCobro === 'DIARIO') {
+    result.setDate(result.getDate() + 1);
+  } else if (tipoCobro === 'SEMANAL') {
+    const weekdayMap: Record<string, number> = {
+      'DOMINGO': 0,
+      'LUNES': 1,
+      'MARTES': 2,
+      'MIERCOLES': 3,
+      'JUEVES': 4,
+      'VIERNES': 5,
+      'SABADO': 6,
+    };
+    const targetDay = weekdayMap[diaCobro?.toUpperCase() || ''] ?? 1; // Default to Lunes if invalid
+    const currentDay = result.getDay();
+    let daysToAdd = (targetDay - currentDay + 7) % 7;
+    if (daysToAdd === 0) daysToAdd = 7; // Next occurrence is next week if today is that day
+    result.setDate(result.getDate() + daysToAdd);
+  } else if (tipoCobro === 'QUINCENAL') {
+    result.setDate(result.getDate() + 15);
+  } else if (tipoCobro === 'MENSUAL') {
+    result.setMonth(result.getMonth() + 1);
+  }
+  return result;
 }

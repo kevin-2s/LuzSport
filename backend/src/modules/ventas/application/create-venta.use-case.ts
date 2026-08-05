@@ -15,6 +15,8 @@ export class CreateVentaUseCase {
       estado: 'PAGADA' | 'FIADA';
       detalles: { articuloId: string; talla: string; cantidad: number; precioUnitario: number }[];
       clienteId?: string;
+      tipoCobro?: string;
+      diaCobro?: string;
     },
   ) {
     return this.ventaRepository.create(tiendaId, data);
