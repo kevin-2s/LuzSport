@@ -2,11 +2,13 @@ import { useState, useMemo, useEffect } from 'react';
 import { useArticulos } from '../../hooks/useArticulos';
 import { DataTable } from '../molecules/DataTable';
 import { CreateArticuloModal } from './CreateArticuloModal';
+import { AddStockModal } from './AddStockModal';
 import { Button } from '../atoms/Button';
 import { 
   Package, 
   Plus, 
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Articulo } from '../../hooks/useArticulos';
@@ -17,12 +19,14 @@ interface InventarioViewProps {
 }
 
 export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddModal, onAddModalClosed }) => {
-  const { articulos, isLoading, createArticulo, isCreating } = useArticulos();
+  const { articulos, isLoading, createArticulo, isCreating, addStock, isAddingStock } = useArticulos();
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [tallaFilter, setTallaFilter] = useState('');
-  const [colorFilter, setColorFilter] = useState('');
+  const [nombreFilter, setNombreFilter] = useState('');
+  const [selectedArticuloForDetail, setSelectedArticuloForDetail] = useState<Articulo | null>(null);
+  const [selectedTallaForRestock, setSelectedTallaForRestock] = useState<{tallaId: string, tallaNombre: string} | null>(null);
 
   useEffect(() => {
     if (initialOpenAddModal) {
@@ -78,13 +82,13 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
       if (tallaFilter.trim() && !art.tallas.some((t) => t.talla.toLowerCase().includes(tallaFilter.toLowerCase().trim()))) {
         return false;
       }
-      // Color filter
-      if (colorFilter.trim() && !art.color.toLowerCase().includes(colorFilter.toLowerCase().trim())) {
+      // Nombre filter
+      if (nombreFilter.trim() && !art.nombre.toLowerCase().includes(nombreFilter.toLowerCase().trim())) {
         return false;
       }
       return true;
     });
-  }, [articulos, selectedCategory, tallaFilter, colorFilter]);
+  }, [articulos, selectedCategory, tallaFilter, nombreFilter]);
 
   // 3. Define columns for Desktop TanStack Table
   const columns = useMemo<ColumnDef<Articulo>[]>(
@@ -177,6 +181,29 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
     await createArticulo(data);
   };
 
+  const handleAddStock = async (cantidad: number) => {
+    if (!selectedArticuloForDetail || !selectedTallaForRestock) return;
+    
+    await addStock({
+      articuloId: selectedArticuloForDetail.id,
+      tallaId: selectedTallaForRestock.tallaId,
+      cantidad,
+    });
+    
+    // Update local state so detail modal reflects change immediately
+    setSelectedArticuloForDetail(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        tallas: prev.tallas.map(t => 
+          t.id === selectedTallaForRestock.tallaId 
+            ? { ...t, cantidad: t.cantidad + cantidad }
+            : t
+        )
+      };
+    });
+  };
+
   return (
     <div className="space-y-6">
       
@@ -227,9 +254,9 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
             className="w-full px-3.5 py-2 text-sm bg-white border border-neutral-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-neutral-textPrimary"
           />
           <input
-            placeholder="Color..."
-            value={colorFilter}
-            onChange={(e) => setColorFilter(e.target.value)}
+            placeholder="Nombre..."
+            value={nombreFilter}
+            onChange={(e) => setNombreFilter(e.target.value)}
             className="w-full px-3.5 py-2 text-sm bg-white border border-neutral-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-neutral-textPrimary"
           />
         </div>
@@ -266,9 +293,9 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
           </div>
           <div className="relative">
             <input
-              placeholder="Filtrar por color..."
-              value={colorFilter}
-              onChange={(e) => setColorFilter(e.target.value)}
+              placeholder="Filtrar por nombre..."
+              value={nombreFilter}
+              onChange={(e) => setNombreFilter(e.target.value)}
               className="w-full px-4 py-2 text-sm bg-white border border-neutral-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-neutral-textPrimary"
             />
           </div>
@@ -352,7 +379,10 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
                 </div>
 
                 {/* Bottom Card Action */}
-                <button className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-slate-50 border border-neutral-border hover:bg-slate-100 rounded-xl text-xs font-bold text-neutral-textSecondary hover:text-neutral-textPrimary transition-all">
+                <button 
+                  onClick={() => setSelectedArticuloForDetail(art)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-slate-50 border border-neutral-border hover:bg-slate-100 rounded-xl text-xs font-bold text-neutral-textSecondary hover:text-neutral-textPrimary transition-all"
+                >
                   Ver detalle completo
                 </button>
               </div>
@@ -368,6 +398,107 @@ export const InventarioView: React.FC<InventarioViewProps> = ({ initialOpenAddMo
         onSubmit={handleCreate}
         isLoading={isCreating}
       />
+
+      {/* 9. Article Detail Modal */}
+      {selectedArticuloForDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-xl border border-neutral-border p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-neutral-textPrimary tracking-tight">Detalle del Artículo</h3>
+              <button 
+                onClick={() => setSelectedArticuloForDetail(null)} 
+                className="text-slate-400 hover:text-slate-600 rounded-lg p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Product General Info Card */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-neutral-border/30 space-y-2">
+                <div className="flex justify-between text-xs text-neutral-textSecondary font-semibold">
+                  <span>Nombre:</span>
+                  <span className="text-neutral-textPrimary font-bold">{selectedArticuloForDetail.nombre}</span>
+                </div>
+                <div className="flex justify-between text-xs text-neutral-textSecondary font-semibold">
+                  <span>Categoría:</span>
+                  <span className="text-neutral-textPrimary">{selectedArticuloForDetail.categoria}</span>
+                </div>
+                <div className="flex justify-between text-xs text-neutral-textSecondary font-semibold">
+                  <span>Color:</span>
+                  <span className="text-neutral-textPrimary">{selectedArticuloForDetail.color || 'No especificado'}</span>
+                </div>
+                <div className="flex justify-between text-xs pt-1.5 border-t border-slate-100 font-bold text-primary">
+                  <span>Precio de Venta:</span>
+                  <span>{formatCurrency(selectedArticuloForDetail.precio)}</span>
+                </div>
+              </div>
+
+              {/* Tallas detailed list */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-700 tracking-wide uppercase">Distribución de Tallas y Stock</h4>
+                <div className="border border-neutral-border/30 rounded-xl overflow-hidden divide-y divide-slate-100">
+                  <div className="grid grid-cols-4 bg-slate-50/50 p-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">
+                    <span>Talla</span>
+                    <span>Stock Actual</span>
+                    <span>Mínimo</span>
+                    <span>Acción</span>
+                  </div>
+                  {selectedArticuloForDetail.tallas.map((t) => {
+                    const isAlert = t.cantidad <= t.stockMinimo;
+                    const isZero = t.cantidad === 0;
+                    const statusDot = isZero ? '🔴' : isAlert ? '🟠' : '🟢';
+                    const tallaNombre = t.talla;
+
+                    return (
+                      <div key={t.id} className="grid grid-cols-4 p-2 text-xs font-semibold text-neutral-textPrimary items-center text-center">
+                        <span className="font-bold">T{tallaNombre}</span>
+                        <span className="flex items-center justify-center gap-1">
+                          <span>{statusDot}</span>
+                          {t.cantidad} uds
+                        </span>
+                        <span className="text-neutral-textSecondary font-medium">{t.stockMinimo} uds</span>
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() => setSelectedTallaForRestock({ tallaId: t.id, tallaNombre })}
+                            className="bg-primary/10 hover:bg-primary/20 text-primary p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold"
+                            title="Añadir stock"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Añadir
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                type="button"
+                onClick={() => setSelectedArticuloForDetail(null)}
+                className="!px-6 !py-2"
+              >
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Add Stock Modal */}
+      {selectedTallaForRestock && selectedArticuloForDetail && (
+        <AddStockModal
+          isOpen={true}
+          onClose={() => setSelectedTallaForRestock(null)}
+          onSubmit={handleAddStock}
+          isLoading={isAddingStock}
+          talla={selectedTallaForRestock.tallaNombre}
+          articuloNombre={selectedArticuloForDetail.nombre}
+        />
+      )}
 
     </div>
   );
