@@ -7,6 +7,7 @@ export interface Abono {
   fiadoId: string;
   fecha: string;
   monto: number;
+  metodo: string;
   createdAt: string;
 }
 
@@ -15,6 +16,9 @@ export interface Fiado {
   ventaId: string;
   clienteId: string;
   saldoPendiente: number;
+  tipoCobro: string;
+  diaCobro: string | null;
+  fechaVencimiento: string;
   cliente: Cliente;
   venta: Venta;
   abonos: Abono[];
@@ -34,8 +38,8 @@ export const useFiados = () => {
   });
 
   const registrarAbonoMutation = useMutation({
-    mutationFn: async ({ fiadoId, monto }: { fiadoId: string; monto: number }) => {
-      const response = await api.post(`/fiados/${fiadoId}/abonos`, { monto });
+    mutationFn: async ({ fiadoId, monto, metodo }: { fiadoId: string; monto: number; metodo: string }) => {
+      const response = await api.post(`/fiados/${fiadoId}/abonos`, { monto, metodo });
       return response.data;
     },
     onSuccess: () => {
