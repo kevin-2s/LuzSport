@@ -9,6 +9,7 @@ import {
   Layers, 
   ShoppingBag, 
   Users, 
+  User,
   LogOut, 
   AlertTriangle, 
   ClipboardList, 
@@ -131,12 +132,8 @@ export const DashboardPage: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Mobile Top Header (Matching Mockup exactly) */}
         <header className="flex md:hidden justify-between items-center bg-slate-900 text-white px-5 py-3 border-b border-slate-800 sticky top-0 z-30 shadow-sm shrink-0">
-          {/* Left: Hamburger menu icon */}
-          <button type="button" className="text-slate-400 p-1">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+          {/* Left: Spacer to keep title centered */}
+          <div className="w-8 h-8 pointer-events-none" />
 
           {/* Center: Active tab title */}
           <h2 className="text-base font-bold text-white tracking-wide uppercase first-letter:capitalize">
@@ -203,7 +200,7 @@ export const DashboardPage: React.FC = () => {
                 /* MAIN DYNAMIC DASHBOARD DATA */
                 <>
                   {/* 3. Summary Cards Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     
                     {/* Card 1: Total vendido (Primary highlighted) */}
                     <div className="bg-primary text-white p-5 rounded-2xl shadow-sm space-y-3 flex flex-col justify-between min-h-[120px]">
@@ -261,7 +258,60 @@ export const DashboardPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Card 5: Fiados Vencidos */}
+                    <div className="bg-white p-5 rounded-2xl border border-neutral-border shadow-sm space-y-3 flex flex-col justify-between min-h-[120px]">
+                      <div className="flex justify-between items-start">
+                        <p className="text-xs text-neutral-textSecondary font-semibold tracking-wide uppercase">Fiados Vencidos</p>
+                        <div className={`p-1.5 rounded-lg ${(data?.summary.fiadosVencidosCount || 0) > 0 ? 'bg-red-50 text-semantic-danger animate-pulse' : 'bg-slate-50 text-slate-400'}`}>
+                          <AlertTriangle className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <div>
+                        <p className={`text-2xl font-bold ${(data?.summary.fiadosVencidosCount || 0) > 0 ? 'text-semantic-danger' : 'text-neutral-textPrimary'}`}>
+                          {data?.summary.fiadosVencidosCount || 0}
+                        </p>
+                        <p className="text-xs text-neutral-textSecondary mt-0.5">cobros vencidos</p>
+                      </div>
+                    </div>
+
                   </div>
+
+                  {/* Recordatorios de cobro para hoy */}
+                  {data?.summary.cobrosHoy && data.summary.cobrosHoy.length > 0 && (
+                    <div className="bg-amber-50/40 border border-amber-200 p-6 rounded-2xl space-y-4 animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center gap-2 text-amber-800">
+                        <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0" />
+                        <h3 className="font-extrabold text-xs uppercase tracking-wider">Recordatorios de cobro para hoy</h3>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {data.summary.cobrosHoy.map((cobro) => (
+                          <div 
+                            key={cobro.id} 
+                            className="bg-white p-4 rounded-xl border border-amber-200/50 shadow-sm flex flex-col justify-between space-y-2 hover:border-amber-300/80 transition-all"
+                          >
+                            <div className="space-y-0.5">
+                              <p className="font-bold text-xs text-neutral-textPrimary flex items-center gap-1">
+                                <User className="h-3.5 w-3.5 text-slate-400" />
+                                {cobro.clienteNombre}
+                              </p>
+                              <p className="text-[10px] text-neutral-textSecondary font-semibold">Telf: {cobro.clienteTelefono}</p>
+                            </div>
+                            
+                            <div className="flex justify-between items-center pt-1 border-t border-slate-50 mt-1">
+                              <div>
+                                <p className="text-[8px] font-bold text-amber-800 uppercase tracking-wider">Monto Pendiente</p>
+                                <p className="text-sm font-black text-amber-700">{formatCurrency(cobro.saldoPendiente)}</p>
+                              </div>
+                              <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-50 border border-amber-100 rounded-full text-amber-700 uppercase tracking-wide">
+                                {cobro.tipoCobro === 'DIARIO' ? 'Diario' : cobro.tipoCobro === 'SEMANAL' ? 'Semanal' : cobro.tipoCobro === 'QUINCENAL' ? 'Quincenal' : 'Mensual'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 4. Main Section Grid */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
@@ -435,7 +485,7 @@ export const DashboardPage: React.FC = () => {
         </main>
 
         {/* 6. Bottom Right Help Button */}
-        <button className="absolute bottom-6 right-6 p-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all z-10">
+        <button className="hidden md:block absolute bottom-6 right-6 p-3 bg-slate-900 hover:bg-slate-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all z-10">
           <HelpCircle className="h-5 w-5" />
         </button>
 

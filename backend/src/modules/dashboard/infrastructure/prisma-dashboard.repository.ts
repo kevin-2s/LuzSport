@@ -41,7 +41,7 @@ export class PrismaDashboardRepository implements IDashboardRepository {
     const tallasAlertaCount = alertResult[0]?.count || 0;
 
     // 3. Fiados pendientes (saldoPendiente > 0)
-    const fiados = await this.prisma.fiado.findMany({
+    const activeFiados = await this.prisma.fiado.findMany({
       where: {
         venta: {
           tiendaId,
@@ -50,15 +50,28 @@ export class PrismaDashboardRepository implements IDashboardRepository {
           gt: 0,
         },
       },
-      select: {
-        saldoPendiente: true,
-        clienteId: true,
+      include: {
+        cliente: true,
       },
     });
 
-    const fiadosPendientesMonto = fiados.reduce((sum, f) => sum + f.saldoPendiente, 0);
-    const uniqueClients = new Set(fiados.map((f) => f.clienteId));
+    const fiadosPendientesMonto = activeFiados.reduce((sum, f) => sum + f.saldoPendiente, 0);
+    const uniqueClients = new Set(activeFiados.map((f) => f.clienteId));
     const fiadosClientesCount = uniqueClients.size;
+
+    const now = new Date();
+    const fiadosVencidosCount = activeFiados.filter((f) => f.fechaVencimiento < now).length;
+
+    const cobrosHoy = activeFiados
+      .filter((f) => f.fechaVencimiento <= endOfToday)
+      .map((f) => ({
+        id: f.id,
+        clienteNombre: f.cliente.nombre,
+        clienteTelefono: f.cliente.telefono,
+        saldoPendiente: f.saldoPendiente,
+        tipoCobro: f.tipoCobro,
+        fechaVencimiento: f.fechaVencimiento,
+      }));
 
     return {
       totalVendidoHoy,
@@ -66,6 +79,8 @@ export class PrismaDashboardRepository implements IDashboardRepository {
       tallasAlertaCount,
       fiadosPendientesMonto,
       fiadosClientesCount,
+      fiadosVencidosCount,
+      cobrosHoy,
     };
   }
 
@@ -126,19 +141,58 @@ export class PrismaDashboardRepository implements IDashboardRepository {
 
   async getLowStockTallas(tiendaId: string) {
     const tallas = await this.prisma.$queryRaw<any[]>`
-      SELECT ts.id, a.nombre as "articuloNombre", ts.talla, ts.cantidad
+      SELECT 
+        a.id as "articuloId", 
+        a.nombre as "articuloNombre", 
+        ts.talla, 
+        ts.cantidad, 
+        ts."stockMinimo",
+        (SELECT COUNT(*) FROM "TallaStock" WHERE "articuloId" = a.id) as "totalTallasArticulo"
       FROM "TallaStock" ts
       INNER JOIN "Articulo" a ON ts."articuloId" = a.id
       WHERE a."tiendaId" = ${tiendaId} AND ts.cantidad <= ts."stockMinimo"
-      ORDER BY ts.cantidad ASC
-      LIMIT 5
     `;
 
-    return tallas.map((t) => ({
-      id: t.id,
-      articulo: t.articuloNombre,
-      descripcion: `Talla ${t.talla}`,
-      stock: t.cantidad,
-    }));
+    const grouped = new Map<string, any>();
+    
+    for (const t of tallas) {
+      const totalTallas = Number(t.totalTallasArticulo);
+      if (!grouped.has(t.articuloId)) {
+        grouped.set(t.articuloId, {
+          id: t.articuloId,
+          articulo: t.articuloNombre,
+          tallasBajas: [],
+          totalTallas
+        });
+      }
+      grouped.get(t.articuloId).tallasBajas.push({
+        talla: t.talla,
+        cantidad: t.cantidad
+      });
+    }
+
+    const result = Array.from(grouped.values()).map(art => {
+      const isCompletamenteAgotado = art.tallasBajas.length === art.totalTallas && art.tallasBajas.every((t: any) => t.cantidad === 0);
+      const stock = art.tallasBajas.reduce((sum: number, t: any) => sum + t.cantidad, 0);
+      
+      let descripcion = '';
+      if (isCompletamenteAgotado) {
+        descripcion = 'Agotado totalmente';
+      } else if (art.tallasBajas.length === art.totalTallas) {
+        descripcion = 'Todas las tallas con stock bajo';
+      } else {
+        descripcion = `Tallas: ${art.tallasBajas.map((t: any) => t.talla).join(', ')}`;
+      }
+
+      return {
+        id: art.id,
+        articulo: art.articulo,
+        descripcion,
+        stock
+      };
+    });
+
+    result.sort((a, b) => a.stock - b.stock);
+    return result.slice(0, 5);
   }
 }

@@ -7,6 +7,15 @@ export interface DashboardSummary {
   tallasAlertaCount: number;
   fiadosPendientesMonto: number;
   fiadosClientesCount: number;
+  fiadosVencidosCount: number;
+  cobrosHoy: {
+    id: string;
+    clienteNombre: string;
+    clienteTelefono: string;
+    saldoPendiente: number;
+    tipoCobro: string;
+    fechaVencimiento: string;
+  }[];
 }
 
 export interface RecentSale {
