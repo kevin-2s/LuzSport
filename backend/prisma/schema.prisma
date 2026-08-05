@@ -99,15 +99,18 @@ model Cliente {
 }
 
 model Fiado {
-  id             String   @id @default(uuid())
-  ventaId        String   @unique
-  venta          Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
-  clienteId      String
-  cliente        Cliente  @relation(fields: [clienteId], references: [id])
-  saldoPendiente Float
-  abonos         Abono[]
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(uuid())
+  ventaId          String   @unique
+  venta            Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  clienteId        String
+  cliente          Cliente  @relation(fields: [clienteId], references: [id])
+  saldoPendiente   Float
+  tipoCobro        String   @default("DIARIO") // DIARIO, SEMANAL, QUINCENAL, MENSUAL
+  diaCobro         String?  // LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO
+  fechaVencimiento DateTime @default(now())
+  abonos           Abono[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Abono {
@@ -116,6 +119,7 @@ model Abono {
   fiado     Fiado    @relation(fields: [fiadoId], references: [id], onDelete: Cascade)
   fecha     DateTime @default(now())
   monto     Float
+  metodo    String   @default("EFECTIVO") // EFECTIVO, TRANSFERENCIA, NEQUI, DAVIPLATA, TARJETA, etc.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
