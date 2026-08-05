@@ -93,7 +93,7 @@ export const LoginPage: React.FC = () => {
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="ejemplo@luzsport.com"
+              placeholder="ingrese un correo electronico valido"
               required
             />
 

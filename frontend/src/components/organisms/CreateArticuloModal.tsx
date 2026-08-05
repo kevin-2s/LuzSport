@@ -24,11 +24,16 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
 }) => {
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('Zapatos');
+  const [subcategoria, setSubcategoria] = useState('Camisa'); // Solo se usa si categoria es 'Ropa'
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
-  const [tallas, setTallas] = useState<{ talla: string; cantidad: string; stockMinimo: string }[]>([
-    { talla: '', cantidad: '', stockMinimo: '' },
-  ]);
+  const zapatosDefaultTallas = Array.from({ length: 10 }, (_, i) => ({
+    talla: (36 + i).toString(),
+    cantidad: '',
+    stockMinimo: ''
+  }));
+
+  const [tallas, setTallas] = useState<{ talla: string; cantidad: string; stockMinimo: string }[]>(zapatosDefaultTallas);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -52,24 +57,28 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
     e.preventDefault();
     setError(null);
 
+    const isSingleSize = categoria === 'Accesorios' || (categoria === 'Ropa' && subcategoria === 'Camisa');
+
     // Validations
-    if (categoria !== 'Accesorios') {
-      if (tallas.some((t) => !t.talla || t.cantidad === '' || t.stockMinimo === '')) {
-        setError('Por favor completa todos los campos de tallas.');
+    let tallasToSubmit = tallas;
+    
+    if (!isSingleSize) {
+      if (tallasToSubmit.length === 0) {
+        setError('Por favor ingresa al menos una talla.');
         return;
       }
-    } else {
-      if (!tallas[0] || tallas[0].cantidad === '' || tallas[0].stockMinimo === '') {
-        setError('Por favor ingresa la cantidad de stock y el mínimo de alerta.');
+      
+      if (tallasToSubmit.some((t) => !t.talla.trim())) {
+        setError('Asegúrate de llenar el nombre/número de todas las tallas ingresadas.');
         return;
       }
     }
 
     try {
-      const formattedTallas = tallas.map((t) => ({
-        talla: categoria === 'Accesorios' ? 'U' : t.talla.trim(),
-        cantidad: parseInt(t.cantidad, 10),
-        stockMinimo: parseInt(t.stockMinimo, 10),
+      const formattedTallas = tallasToSubmit.map((t) => ({
+        talla: isSingleSize ? 'U' : t.talla.trim(),
+        cantidad: t.cantidad === '' ? 0 : parseInt(t.cantidad, 10),
+        stockMinimo: t.stockMinimo === '' ? 0 : parseInt(t.stockMinimo, 10),
       }));
 
       await onSubmit({
@@ -83,9 +92,10 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
       // Clear state
       setNombre('');
       setCategoria('Zapatos');
+      setSubcategoria('Camisa');
       setColor('');
       setPrecio('');
-      setTallas([{ talla: '', cantidad: '', stockMinimo: '' }]);
+      setTallas(zapatosDefaultTallas);
       onClose();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Ocurrió un error al agregar el artículo.');
@@ -137,8 +147,14 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
                 onChange={(e) => {
                   const val = e.target.value;
                   setCategoria(val);
-                  if (val === 'Accesorios') {
+                  if (val === 'Accesorios' || (val === 'Ropa' && subcategoria === 'Camisa')) {
                     setTallas([{ talla: 'U', cantidad: '', stockMinimo: '' }]);
+                  } else if (val === 'Zapatos') {
+                    setTallas(Array.from({ length: 10 }, (_, i) => ({
+                      talla: (36 + i).toString(),
+                      cantidad: '',
+                      stockMinimo: ''
+                    })));
                   } else {
                     setTallas([{ talla: '', cantidad: '', stockMinimo: '' }]);
                   }
@@ -153,6 +169,34 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
               </select>
             </div>
           </div>
+
+          {categoria === 'Ropa' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="subcategoria" className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
+                  Tipo de Ropa
+                </label>
+                <select
+                  id="subcategoria"
+                  value={subcategoria}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSubcategoria(val);
+                    if (val === 'Camisa') {
+                      setTallas([{ talla: 'U', cantidad: '', stockMinimo: '' }]);
+                    } else {
+                      setTallas([{ talla: '', cantidad: '', stockMinimo: '' }]);
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-border text-sm transition-all duration-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
+                  disabled={isLoading}
+                >
+                  <option value="Camisa">Camisa (Talla Única / General)</option>
+                  <option value="Jeans">Jeans (Varias Tallas)</option>
+                </select>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {categoria !== 'Accesorios' ? (
@@ -184,8 +228,8 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
           </div>
 
           {/* Conditional Stock / Tallas Section */}
-          {categoria === 'Accesorios' ? (
-            /* Stock Inputs for Accesorios (No sizes) */
+          {categoria === 'Accesorios' || (categoria === 'Ropa' && subcategoria === 'Camisa') ? (
+            /* Stock Inputs for Accesorios and Camisas (No sizes) */
             <div className="border-t border-neutral-border pt-4 space-y-3 shrink-0">
               <h4 className="text-xs font-bold text-slate-700 tracking-wide uppercase">Cantidad de stock</h4>
               <div className="grid grid-cols-2 gap-4">
@@ -200,7 +244,6 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
                     value={tallas[0]?.cantidad || ''}
                     onChange={(e) => handleTallaChange(0, 'cantidad', e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-neutral-textPrimary"
-                    required
                     min="0"
                     disabled={isLoading}
                   />
@@ -216,7 +259,6 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
                     value={tallas[0]?.stockMinimo || ''}
                     onChange={(e) => handleTallaChange(0, 'stockMinimo', e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-neutral-textPrimary"
-                    required
                     min="0"
                     disabled={isLoading}
                   />
@@ -260,7 +302,6 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
                         value={t.cantidad}
                         onChange={(e) => handleTallaChange(index, 'cantidad', e.target.value)}
                         className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
-                        required
                         min="0"
                         disabled={isLoading}
                       />
@@ -272,7 +313,6 @@ export const CreateArticuloModal: React.FC<CreateArticuloModalProps> = ({
                         value={t.stockMinimo}
                         onChange={(e) => handleTallaChange(index, 'stockMinimo', e.target.value)}
                         className="w-full px-3 py-2 rounded-lg border border-neutral-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 text-neutral-textPrimary"
-                        required
                         min="0"
                         disabled={isLoading}
                       />

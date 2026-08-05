@@ -49,4 +49,24 @@ export class PrismaArticuloRepository implements IArticuloRepository {
       },
     });
   }
+
+  async addStock(tiendaId: string, articuloId: string, tallaId: string, cantidad: number) {
+    // Verificar que el artículo pertenece a la tienda
+    const articulo = await this.prisma.articulo.findFirst({
+      where: { id: articuloId, tiendaId },
+    });
+
+    if (!articulo) {
+      throw new Error('Artículo no encontrado o no pertenece a esta tienda');
+    }
+
+    return this.prisma.tallaStock.update({
+      where: { id: tallaId },
+      data: {
+        cantidad: {
+          increment: cantidad,
+        },
+      },
+    });
+  }
 }

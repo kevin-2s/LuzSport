@@ -51,11 +51,24 @@ export const useArticulos = () => {
     },
   });
 
+  const addStockMutation = useMutation({
+    mutationFn: async ({ articuloId, tallaId, cantidad }: { articuloId: string, tallaId: string, cantidad: number }) => {
+      const response = await api.patch(`/articulos/${articuloId}/stock`, { tallaId, cantidad });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['articulos'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardData'] });
+    },
+  });
+
   return {
     articulos: query.data || [],
     isLoading: query.isLoading,
     error: query.error,
     createArticulo: createMutation.mutateAsync,
     isCreating: createMutation.isPending,
+    addStock: addStockMutation.mutateAsync,
+    isAddingStock: addStockMutation.isPending,
   };
 };

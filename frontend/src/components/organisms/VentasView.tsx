@@ -1,12 +1,16 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useVentas } from '../../hooks/useVentas';
 import { useArticulos } from '../../hooks/useArticulos';
 import { DataTable } from '../molecules/DataTable';
 import { CreateVentaModal } from './CreateVentaModal';
 import { Button } from '../atoms/Button';
-import { Plus, Calendar, User, Download } from 'lucide-react';
+import { Plus, Calendar, User, Download, X, Search } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Venta } from '../../hooks/useVentas';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { DayPicker, type DateRange } from 'react-day-picker';
+import 'react-day-picker/dist/style.css';
 
 interface VentasViewProps {
   initialOpenAddModal?: boolean;
@@ -28,7 +32,23 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedEstado, setSelectedEstado] = useState('Todas');
-  const [dateFilter, setDateFilter] = useState('');
+  const [searchCode, setSearchCode] = useState('');
+  
+  // Date Range State
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+
+  // Close calendar on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setIsDatePickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Export states
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
@@ -46,11 +66,46 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
     }
   };
 
+  // Filter sales
+  const filteredVentas = useMemo(() => {
+    return ventas.filter((v) => {
+      // Estado filter
+      if (selectedEstado !== 'Todas') {
+        if (selectedEstado === 'Pagada' && v.estado !== 'PAGADA') return false;
+        if (selectedEstado === 'Fiada' && v.estado !== 'FIADA') return false;
+      }
+      
+      // Code filter
+      if (searchCode.trim()) {
+        const shortCode = v.id.slice(-6).toLowerCase();
+        if (!shortCode.includes(searchCode.trim().toLowerCase())) {
+          return false;
+        }
+      }
+      // Date filter
+      if (dateRange?.from) {
+        const saleDate = new Date(v.fecha);
+        saleDate.setHours(0, 0, 0, 0);
+
+        const startDate = new Date(dateRange.from);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDate = dateRange.to ? new Date(dateRange.to) : new Date(startDate);
+        endDate.setHours(23, 59, 59, 999);
+
+        if (saleDate.getTime() < startDate.getTime() || saleDate.getTime() > endDate.getTime()) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [ventas, selectedEstado, dateRange, searchCode]);
+
   // Calculate totals
-  const totalRegistros = ventas.length;
+  const totalRegistros = filteredVentas.length;
   const totalMonto = useMemo(() => {
-    return ventas.reduce((sum, v) => sum + v.total, 0);
-  }, [ventas]);
+    return filteredVentas.reduce((sum, v) => sum + v.total, 0);
+  }, [filteredVentas]);
 
   // Helper to format currency
   const formatCurrency = (value: number) => {
@@ -61,23 +116,6 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
       maximumFractionDigits: 0
     }).format(value).replace('COP', '$');
   };
-
-  // Filter sales
-  const filteredVentas = useMemo(() => {
-    return ventas.filter((v) => {
-      // Estado filter
-      if (selectedEstado !== 'Todas') {
-        if (selectedEstado === 'Pagada' && v.estado !== 'PAGADA') return false;
-        if (selectedEstado === 'Fiada' && v.estado !== 'FIADA') return false;
-      }
-      // Date filter
-      if (dateFilter) {
-        const saleDateString = new Date(v.fecha).toISOString().slice(0, 10);
-        if (saleDateString !== dateFilter) return false;
-      }
-      return true;
-    });
-  }, [ventas, selectedEstado, dateFilter]);
 
   // Excel/CSV Export handler (Filtered sales directly)
   const handleExportExcel = (dataToExport: Venta[]) => {
@@ -92,9 +130,19 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
       return [fecha, codigo, articulosStr, cliente, total, estado];
     });
 
+    const pagadasSum = dataToExport.filter((v) => v.estado === 'PAGADA').reduce((sum, v) => sum + v.total, 0);
+    const fiadasSum = dataToExport.filter((v) => v.estado === 'FIADA').reduce((sum, v) => sum + v.total, 0);
+    const formatCurrStr = (val: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val).replace('COP', '$');
+
+    const summaryRows = [
+      ['', '', '', '', '', ''],
+      ['', '', '', 'TOTAL INGRESOS (PAGADAS):', formatCurrStr(pagadasSum), ''],
+      ['', '', '', 'TOTAL CRÉDITO (FIADAS):', formatCurrStr(fiadasSum), '']
+    ];
+
     const csvContent = 
       '\uFEFF' + 
-      [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+      [headers, ...rows, ...summaryRows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -115,6 +163,8 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
     const title = `Reporte de Ventas - LuzSport`;
     const dateText = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const totalSum = dataToExport.reduce((sum, v) => sum + v.total, 0);
+    const totalPagado = dataToExport.filter((v) => v.estado === 'PAGADA').reduce((sum, v) => sum + v.total, 0);
+    const totalFiado = dataToExport.filter((v) => v.estado === 'FIADA').reduce((sum, v) => sum + v.total, 0);
 
     const rowsHTML = dataToExport.map((venta) => {
       const fecha = new Date(venta.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -137,6 +187,8 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
     }).join('');
 
     const totalSumFormatted = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(totalSum).replace('COP', '$');
+    const totalPagadoFormatted = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(totalPagado).replace('COP', '$');
+    const totalFiadoFormatted = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(totalFiado).replace('COP', '$');
 
     printWindow.document.write(`
       <html>
@@ -181,14 +233,18 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
             <tbody>
               ${rowsHTML}
               <tr class="total-row">
-                <td colspan="4" style="padding: 15px 10px; border-top: 2px solid #E2E8F0; text-align: right; font-size: 14px; font-weight: bold;">TOTAL SUMATORIA:</td>
-                <td colspan="2" style="padding: 15px 10px; border-top: 2px solid #E2E8F0; font-size: 16px; font-weight: 900; color: #C2410C;">${totalSumFormatted}</td>
+                <td colspan="4" style="padding: 15px 10px; border-top: 2px solid #E2E8F0; text-align: right; font-size: 14px; font-weight: bold;">TOTAL INGRESOS (PAGADAS):</td>
+                <td colspan="2" style="padding: 15px 10px; border-top: 2px solid #E2E8F0; font-size: 16px; font-weight: 900; color: #059669;">${totalPagadoFormatted}</td>
+              </tr>
+              <tr class="total-row">
+                <td colspan="4" style="padding: 10px; border-top: 1px solid #E2E8F0; text-align: right; font-size: 14px; font-weight: bold;">TOTAL CRÉDITO (FIADAS):</td>
+                <td colspan="2" style="padding: 10px; border-top: 1px solid #E2E8F0; font-size: 16px; font-weight: 900; color: #D97706;">${totalFiadoFormatted}</td>
               </tr>
             </tbody>
           </table>
 
           <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #94A3B8;">
-            Este documento es una representación digital del histórico de ventas de la sucursal. Generado el ${new Date().toLocaleString()}.
+            Este documento es una representación digital de las ventas de Calzado & Moda. Generado el ${new Date().toLocaleString()}.
           </div>
 
           <script>
@@ -326,37 +382,37 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
                   <button
                     type="button"
                     onClick={() => {
-                      const pagadas = ventas.filter((v) => v.estado === 'PAGADA');
+                      const pagadas = filteredVentas.filter((v) => v.estado === 'PAGADA');
                       handleExportExcel(pagadas);
                       setIsExportDropdownOpen(false);
                     }}
                     className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
                   >
                     <span>🟢</span>
-                    Solo Pagadas
+                    Solo ventas pagadas
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      const fiadas = ventas.filter((v) => v.estado === 'FIADA');
+                      const fiadas = filteredVentas.filter((v) => v.estado === 'FIADA');
                       handleExportExcel(fiadas);
                       setIsExportDropdownOpen(false);
                     }}
                     className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
                   >
                     <span>🟠</span>
-                    Solo Fiadas
+                    Solo ventas fiadas
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      handleExportExcel(ventas);
+                      handleExportExcel(filteredVentas);
                       setIsExportDropdownOpen(false);
                     }}
                     className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2 border-b border-slate-100 pb-2"
                   >
                     <span>📊</span>
-                    Todas las Ventas
+                    Todas las Ventas (filtradas)
                   </button>
 
                   {/* PDF section */}
@@ -364,37 +420,37 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
                   <button
                     type="button"
                     onClick={() => {
-                      const pagadas = ventas.filter((v) => v.estado === 'PAGADA');
+                      const pagadas = filteredVentas.filter((v) => v.estado === 'PAGADA');
                       handleExportPDF(pagadas);
                       setIsExportDropdownOpen(false);
                     }}
                     className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
                   >
                     <span>🟢</span>
-                    Solo Pagadas
+                    Solo ventas pagadas
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      const fiadas = ventas.filter((v) => v.estado === 'FIADA');
+                      const fiadas = filteredVentas.filter((v) => v.estado === 'FIADA');
                       handleExportPDF(fiadas);
                       setIsExportDropdownOpen(false);
                     }}
                     className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
                   >
                     <span>🟠</span>
-                    Solo Fiadas
+                    Solo ventas fiadas
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      handleExportPDF(ventas);
+                      handleExportPDF(filteredVentas);
                       setIsExportDropdownOpen(false);
                     }}
                     className="w-full text-left px-3 py-1.5 text-[11px] font-semibold text-neutral-textPrimary hover:bg-slate-50 transition-colors flex items-center gap-2"
                   >
                     <span>📄</span>
-                    Todas las Ventas
+                    Todas las Ventas (filtradas)
                   </button>
                 </div>
               </>
@@ -431,15 +487,71 @@ export const VentasView: React.FC<VentasViewProps> = ({ initialOpenAddModal, onA
           ))}
         </div>
 
-        {/* Date Filter Input */}
-        <div className="relative w-full sm:max-w-[200px]">
-          <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-textSecondary pointer-events-none" />
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="w-full pl-4 pr-10 py-2 text-sm bg-white border border-neutral-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-neutral-textPrimary"
-          />
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {/* Code Search Filter */}
+          <div className="relative w-full sm:w-[150px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-textSecondary" />
+            <input
+              type="text"
+              placeholder="Buscar código"
+              value={searchCode}
+              onChange={(e) => setSearchCode(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-neutral-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-neutral-textPrimary shadow-sm uppercase placeholder:normal-case"
+            />
+          </div>
+
+          {/* Date Range Filter */}
+          <div className="relative w-full sm:w-[260px]" ref={datePickerRef}>
+            <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-textSecondary pointer-events-none" />
+            <input
+              type="text"
+              readOnly
+              placeholder="Filtrar por fechas..."
+              value={
+                dateRange?.from 
+                  ? `${format(dateRange.from, 'dd MMM yyyy', { locale: es })}${dateRange.to ? ` - ${format(dateRange.to, 'dd MMM yyyy', { locale: es })}` : ''}`
+                  : ''
+              }
+              onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
+              className="w-full pl-4 pr-10 py-2 text-sm bg-white border border-neutral-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-neutral-textPrimary cursor-pointer shadow-sm"
+            />
+            {dateRange?.from && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDateRange(undefined);
+                }}
+                className="absolute right-9 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 bg-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            
+            {isDatePickerOpen && (
+              <div className="absolute top-full right-0 mt-2 z-50 bg-white border border-neutral-border rounded-2xl shadow-2xl p-3 animate-in fade-in slide-in-from-top-2">
+                <DayPicker
+                  mode="range"
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  locale={es}
+                  showOutsideDays
+                  modifiersClassNames={{
+                    selected: "bg-primary text-white hover:bg-primary-hover",
+                    range_middle: "bg-primary/10 text-neutral-textPrimary hover:bg-primary/20",
+                    range_start: "bg-primary text-white rounded-l-full",
+                    range_end: "bg-primary text-white rounded-r-full",
+                    today: "font-bold text-primary",
+                  }}
+                  className="font-sans text-sm"
+                />
+                <div className="flex justify-end pt-3 border-t border-slate-100 mt-2">
+                  <Button onClick={() => setIsDatePickerOpen(false)} className="!px-4 !py-1.5 text-xs font-bold" variant="primary">
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
       </div>

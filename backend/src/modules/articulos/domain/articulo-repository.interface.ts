@@ -7,4 +7,5 @@ export interface IArticuloRepository {
     precio: number;
     tallas: { talla: string; cantidad: number; stockMinimo: number }[];
   }): Promise<any>;
+  addStock(tiendaId: string, articuloId: string, tallaId: string, cantidad: number): Promise<any>;
 }
